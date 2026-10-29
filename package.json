@@ -1,0 +1,23 @@
+{
+  "name": "bonibot-whatsapp-sbl",
+  "version": "1.0.0",
+  "description": "Bot de WhatsApp Serverless con Multi-LLM y RAG Híbrido para el Colegio San Bonifacio de las Lanzas Bilingüe",
+  "type": "module",
+  "scripts": {
+    "build:kb": "tsx scripts/build_knowledge_base.ts",
+    "ingest:supabase": "tsx scripts/ingest_supabase.ts",
+    "chat": "tsx scripts/chat_cli.ts",
+    "test:rag": "tsx scripts/test_rag.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.1",
+    "dotenv": "^16.4.7",
+    "unpdf": "^0.12.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.4",
+    "tsx": "^4.19.3",
+    "typescript": "^5.7.3"
+  }
+}

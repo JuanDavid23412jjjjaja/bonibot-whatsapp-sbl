@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.env
+.vercel/
+data/local_memory.json
+*.log
+.DS_Store
