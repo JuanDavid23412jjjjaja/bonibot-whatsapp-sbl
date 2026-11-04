@@ -32,27 +32,20 @@ export class MultiLLMRouter {
   private providers: ProviderHandler[];
   private timeoutMs: number;
 
-  constructor(timeoutMs = 60000) {
+  constructor(timeoutMs = 12000) {
     this.timeoutMs = timeoutMs;
     this.providers = [
-      {
-        name: 'NVIDIA NIM',
-        model: env.nvidia.model,
-        isConfigured: () => Boolean(env.nvidia.apiKey),
-        call: (messages, signal) =>
-          this.callOpenAICompatible(
-            'https://integrate.api.nvidia.com/v1/chat/completions',
-            env.nvidia.apiKey,
-            env.nvidia.model,
-            messages,
-            signal
-          ),
-      },
       {
         name: 'Google Gemini',
         model: env.gemini.model,
         isConfigured: () => Boolean(env.gemini.apiKey),
-        call: (messages, signal) => this.callGemini(messages, signal),
+        call: (messages, signal) => this.callGemini(env.gemini.model, messages, signal),
+      },
+      {
+        name: 'Google Gemini Lite',
+        model: 'gemini-3.5-flash-lite',
+        isConfigured: () => Boolean(env.gemini.apiKey),
+        call: (messages, signal) => this.callGemini('gemini-3.5-flash-lite', messages, signal),
       },
       {
         name: 'Groq Cloud',
@@ -82,6 +75,19 @@ export class MultiLLMRouter {
               'HTTP-Referer': 'https://sanboni.edu.co',
               'X-Title': 'BoniBot SBL WhatsApp Assistant',
             }
+          ),
+      },
+      {
+        name: 'NVIDIA NIM',
+        model: env.nvidia.model,
+        isConfigured: () => Boolean(env.nvidia.apiKey),
+        call: (messages, signal) =>
+          this.callOpenAICompatible(
+            'https://integrate.api.nvidia.com/v1/chat/completions',
+            env.nvidia.apiKey,
+            env.nvidia.model,
+            messages,
+            signal
           ),
       },
     ];
@@ -136,7 +142,7 @@ export class MultiLLMRouter {
     );
   }
 
-  private async callGemini(messages: ChatTurn[], signal: AbortSignal): Promise<string> {
+  private async callGemini(model: string, messages: ChatTurn[], signal: AbortSignal): Promise<string> {
     const systemMsg = messages.find((m) => m.role === 'system');
     const chatMsgs = messages.filter((m) => m.role !== 'system');
 
@@ -145,7 +151,7 @@ export class MultiLLMRouter {
       parts: [{ text: m.content }],
     }));
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${env.gemini.model}:generateContent?key=${env.gemini.apiKey}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${env.gemini.apiKey}`;
 
     const body: Record<string, unknown> = {
       contents,

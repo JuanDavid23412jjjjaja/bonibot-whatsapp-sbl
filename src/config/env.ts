@@ -35,7 +35,7 @@ export interface EnvConfig {
 export const env: EnvConfig = {
   gemini: {
     apiKey: process.env.GEMINI_API_KEY?.trim() || '',
-    model: process.env.GEMINI_MODEL?.trim() || 'gemini-3.8-flash',
+    model: process.env.GEMINI_MODEL?.trim() || 'gemini-3.5-flash',
   },
   groq: {
     apiKey: process.env.GROQ_API_KEY?.trim() || '',

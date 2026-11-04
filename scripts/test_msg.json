@@ -1,0 +1,9 @@
+{
+  "messaging_product": "whatsapp",
+  "recipient_type": "individual",
+  "to": "573105872926",
+  "type": "text",
+  "text": {
+    "body": "🦊 ¡Hola Juan David! BoniBot probando conexión en vivo desde el servidor."
+  }
+}

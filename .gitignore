@@ -5,3 +5,6 @@ dist/
 data/local_memory.json
 *.log
 .DS_Store
+
+.vercel
+.env*
