@@ -2,6 +2,7 @@ import { SemanticFastCache } from '../cache/semanticCache.js';
 import { getConfiguredLLMProviders } from '../config/env.js';
 import { ChatTurn, MultiLLMRouter } from '../llm/router.js';
 import { SessionMemory } from '../memory/session.js';
+import { SBLTrainedClassifier } from '../ml/sblClassifier.js';
 import { buildSystemPrompt } from '../rag/prompt.js';
 import { HybridRetriever, RetrievedChunk } from '../rag/retriever.js';
 
@@ -15,12 +16,14 @@ export interface BotReply {
 
 export class BoniBotEngine {
   private fastCache: SemanticFastCache;
+  private mlClassifier: SBLTrainedClassifier;
   private retriever: HybridRetriever;
   private memory: SessionMemory;
   private router: MultiLLMRouter;
 
   constructor() {
     this.fastCache = new SemanticFastCache();
+    this.mlClassifier = new SBLTrainedClassifier();
     this.retriever = new HybridRetriever();
     this.memory = new SessionMemory(8);
     this.router = new MultiLLMRouter(8000);
@@ -62,7 +65,7 @@ export class BoniBotEngine {
       };
     }
 
-    // 2. Tier-0: Fast Semantic Cache (<10ms respuesta instantánea para preguntas institucionales frecuentes)
+    // 2. Tier-0: Fast Semantic Cache (<5ms respuesta instantánea para preguntas institucionales frecuentes)
     const fastMatch = this.fastCache.match(text, 0.8);
     if (fastMatch) {
       await this.memory.appendTurn(phoneNumber, text, fastMatch.entry.answer);
@@ -75,7 +78,20 @@ export class BoniBotEngine {
       };
     }
 
-    // 3. Retrieve relevant institutional chunks (Hybrid RAG - Top 3 más precisos)
+    // 3. Tier-1: Modelo Supervisado Entrenado en Hugging Face (JuanDavid889/bonibot-sbl-ml-model - 194 clases)
+    const mlPred = this.mlClassifier.predict(text, 0.32);
+    if (mlPred) {
+      await this.memory.appendTurn(phoneNumber, text, mlPred.classInfo.canonicalResponse);
+      return {
+        replyText: mlPred.classInfo.canonicalResponse,
+        providerUsed: `Hugging Face ML (${mlPred.hfRepoId})`,
+        modelUsed: `${mlPred.modelName} (prob=${mlPred.probability})`,
+        latencyMs: Date.now() - startTime,
+        retrievedChunks: [],
+      };
+    }
+
+    // 4. Retrieve relevant institutional chunks (Hybrid RAG - Top 3 más precisos)
     const retrievedChunks = await this.retriever.retrieve(text, 3);
 
     // 4. Load recent conversation history for this phone number
