@@ -79,7 +79,7 @@ export class BoniBotEngine {
     }
 
     // 3. Tier-1: Modelo Supervisado Entrenado en Hugging Face (JuanDavid889/bonibot-sbl-ml-model - 194 clases)
-    const mlPred = this.mlClassifier.predict(text, 0.32);
+    const mlPred = this.mlClassifier.predict(text, 0.2);
     if (mlPred) {
       await this.memory.appendTurn(phoneNumber, text, mlPred.classInfo.canonicalResponse);
       return {

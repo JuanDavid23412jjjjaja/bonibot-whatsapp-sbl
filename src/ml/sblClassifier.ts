@@ -203,7 +203,7 @@ export class SBLTrainedClassifier {
     const probability = Math.exp((bestLogit - maxLogit) / tau) / sumExp;
 
     // Requiere logit positivo significativo y superar el umbral de probabilidad Softmax
-    if (bestLogit < 1.5 || probability < minProbability) {
+    if (bestLogit < 0.85 || probability < minProbability) {
       return null;
     }
 

@@ -123,11 +123,12 @@ export class SemanticFastCache {
 
     const queryTokens = tokenize(userQuery);
 
-    // Caso especial para saludos cortos ("hola", "buenos dias", "hola bonibot")
+    // Caso especial para saludos cortos ("hola", "buenas", "hola como estas", "que tal", etc.)
     if (
-      /^(hola|buenos dias|buenas tardes|buenas noches|buen dia|hey|hi|hola bonibot|ayuda|menu)$/i.test(
+      /^(hola.*|buenos dias.*|buenas tardes.*|buenas noches.*|buenas|buen dia.*|hey|hi|saludos|que tal|como estas|ayuda|menu)$/i.test(
         normQuery
-      )
+      ) &&
+      normQuery.split(' ').length <= 5
     ) {
       const greetingEntry = this.entries.find((e) => e.id === 'faq-saludo');
       if (greetingEntry) {
