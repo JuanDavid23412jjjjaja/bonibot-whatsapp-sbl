@@ -1,3 +1,4 @@
+import { SemanticFastCache } from '../cache/semanticCache.js';
 import { getConfiguredLLMProviders } from '../config/env.js';
 import { ChatTurn, MultiLLMRouter } from '../llm/router.js';
 import { SessionMemory } from '../memory/session.js';
@@ -13,14 +14,16 @@ export interface BotReply {
 }
 
 export class BoniBotEngine {
+  private fastCache: SemanticFastCache;
   private retriever: HybridRetriever;
   private memory: SessionMemory;
   private router: MultiLLMRouter;
 
   constructor() {
+    this.fastCache = new SemanticFastCache();
     this.retriever = new HybridRetriever();
     this.memory = new SessionMemory(8);
-    this.router = new MultiLLMRouter(60000);
+    this.router = new MultiLLMRouter(8000);
   }
 
   public async handleMessage(phoneNumber: string, incomingText: string): Promise<BotReply> {
@@ -59,43 +62,53 @@ export class BoniBotEngine {
       };
     }
 
-    // 2. Retrieve relevant institutional chunks (Hybrid RAG - Top 3 más precisos)
+    // 2. Tier-0: Fast Semantic Cache (<10ms respuesta instantánea para preguntas institucionales frecuentes)
+    const fastMatch = this.fastCache.match(text, 0.8);
+    if (fastMatch) {
+      await this.memory.appendTurn(phoneNumber, text, fastMatch.entry.answer);
+      return {
+        replyText: fastMatch.entry.answer,
+        providerUsed: 'FastCache ML SBL (Instantáneo)',
+        modelUsed: `sbl-faq-v1 (conf=${fastMatch.confidence})`,
+        latencyMs: Date.now() - startTime,
+        retrievedChunks: [],
+      };
+    }
+
+    // 3. Retrieve relevant institutional chunks (Hybrid RAG - Top 3 más precisos)
     const retrievedChunks = await this.retriever.retrieve(text, 3);
 
-    // 3. Load recent conversation history for this phone number
+    // 4. Load recent conversation history for this phone number
     const history = await this.memory.getHistory(phoneNumber);
 
-    // 4. Check if at least one LLM provider is configured
+    // 5. Check if at least one LLM provider is configured
     const activeProviders = this.router.getActiveProviders();
     if (activeProviders.length === 0) {
-      // Graceful Extractive RAG mode when user hasn't pasted an API key yet
       const fallbackText =
         retrievedChunks.length > 0
           ? [
-              '🦊 *BoniBot (Modo Vista Previa RAG — Sin API Key LLM aún):*',
-              'Encontré estos fragmentos oficiales exactos para tu consulta:\n',
+              '🦊 *BoniBot (Modo Respuesta Directa RAG SBL):*',
               ...retrievedChunks
-                .slice(0, 3)
+                .slice(0, 2)
                 .map(
                   (c, i) =>
                     `*${i + 1}. ${c.source} (${c.section}):*\n${c.content
                       .replace(/^\[Fuente:[^\]]+\]\n?/, '')
                       .slice(0, 650)}...`
                 ),
-              '\n💡 _Agrega tu `GEMINI_API_KEY` o `GROQ_API_KEY` en el archivo `.env` para que el LLM redacte la respuesta conversacional._',
             ].join('\n\n')
-          : '🦊 No encontré fragmentos relacionados y aún no hay una API Key de LLM configurada en `.env`.';
+          : '🦊 No encontré fragmentos relacionados en la base oficial del colegio.';
 
       return {
         replyText: fallbackText,
-        providerUsed: 'RAG Extractivo Local (Sin API Key)',
+        providerUsed: 'RAG Extractivo Local',
         modelUsed: 'BM25+Sinónimos',
         latencyMs: Date.now() - startTime,
         retrievedChunks,
       };
     }
 
-    // 5. Build prompt and call Multi-LLM Router with fallback
+    // 6. Build prompt and call Multi-LLM Router (HF ML ➔ Gemini ➔ Gemini Lite ➔ Groq)
     const systemPrompt = buildSystemPrompt(retrievedChunks);
     const messages: ChatTurn[] = [
       { role: 'system', content: systemPrompt },
@@ -103,17 +116,41 @@ export class BoniBotEngine {
       { role: 'user', content: text },
     ];
 
-    const llmResult = await this.router.generate(messages);
+    try {
+      const llmResult = await this.router.generate(messages);
+      await this.memory.appendTurn(phoneNumber, text, llmResult.text);
 
-    // 6. Save turn to conversation memory
-    await this.memory.appendTurn(phoneNumber, text, llmResult.text);
+      return {
+        replyText: llmResult.text,
+        providerUsed: llmResult.provider + (llmResult.fallbackUsed ? ' (Fallback)' : ''),
+        modelUsed: llmResult.model,
+        latencyMs: llmResult.latencyMs,
+        retrievedChunks,
+      };
+    } catch (err) {
+      console.warn('Fallback a RAG Extractivo directo por saturación de APIs:', err);
+      const directRagReply =
+        retrievedChunks.length > 0
+          ? [
+              '🦊 *Información Oficial del Colegio San Bonifacio de las Lanzas:*',
+              ...retrievedChunks
+                .slice(0, 2)
+                .map(
+                  (c) =>
+                    `📌 *${c.source} (${c.section}):*\n${c.content
+                      .replace(/^\[Fuente:[^\]]+\]\n?/, '')
+                      .slice(0, 700)}`
+                ),
+            ].join('\n\n')
+          : '🦊 ¡Hola! En este momento estoy experimentando alta demanda. Por favor intenta tu consulta nuevamente en unos segundos.';
 
-    return {
-      replyText: llmResult.text,
-      providerUsed: llmResult.provider + (llmResult.fallbackUsed ? ' (Fallback)' : ''),
-      modelUsed: llmResult.model,
-      latencyMs: llmResult.latencyMs,
-      retrievedChunks,
-    };
+      return {
+        replyText: directRagReply,
+        providerUsed: 'RAG Extractivo Directo (Respaldo)',
+        modelUsed: 'BM25+Sinónimos',
+        latencyMs: Date.now() - startTime,
+        retrievedChunks,
+      };
+    }
   }
 }

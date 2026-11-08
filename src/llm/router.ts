@@ -32,9 +32,23 @@ export class MultiLLMRouter {
   private providers: ProviderHandler[];
   private timeoutMs: number;
 
-  constructor(timeoutMs = 12000) {
+  constructor(timeoutMs = 8000) {
     this.timeoutMs = timeoutMs;
     this.providers = [
+      {
+        name: 'Hugging Face ML (SBL)',
+        model: env.huggingface.model,
+        isConfigured: () =>
+          Boolean(env.huggingface.apiKey || process.env.HUGGINGFACE_API_URL?.trim()),
+        call: (messages, signal) =>
+          this.callOpenAICompatible(
+            env.huggingface.apiUrl,
+            env.huggingface.apiKey,
+            env.huggingface.model,
+            messages,
+            signal
+          ),
+      },
       {
         name: 'Google Gemini',
         model: env.gemini.model,
@@ -194,13 +208,17 @@ export class MultiLLMRouter {
     signal: AbortSignal,
     extraHeaders: Record<string, string> = {}
   ): Promise<string> {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...extraHeaders,
+    };
+    if (apiKey) {
+      headers['Authorization'] = `Bearer ${apiKey}`;
+    }
+
     const res = await fetch(endpoint, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-        ...extraHeaders,
-      },
+      headers,
       body: JSON.stringify({
         model,
         messages,

@@ -4,6 +4,11 @@ import path from 'path';
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
 export interface EnvConfig {
+  huggingface: {
+    apiUrl: string;
+    apiKey: string;
+    model: string;
+  };
   gemini: {
     apiKey: string;
     model: string;
@@ -33,6 +38,13 @@ export interface EnvConfig {
 }
 
 export const env: EnvConfig = {
+  huggingface: {
+    apiUrl:
+      process.env.HUGGINGFACE_API_URL?.trim() ||
+      'https://router.huggingface.co/v1/chat/completions',
+    apiKey: process.env.HUGGINGFACE_API_KEY?.trim() || '',
+    model: process.env.HUGGINGFACE_MODEL?.trim() || 'Qwen/Qwen2.5-7B-Instruct',
+  },
   gemini: {
     apiKey: process.env.GEMINI_API_KEY?.trim() || '',
     model: process.env.GEMINI_MODEL?.trim() || 'gemini-3.5-flash',
@@ -62,7 +74,10 @@ export const env: EnvConfig = {
 };
 
 export function getConfiguredLLMProviders(): string[] {
-  const providers: string[] = [];
+  const providers: string[] = ['FastCache SBL (<10ms)'];
+  if (env.huggingface.apiKey || process.env.HUGGINGFACE_API_URL) {
+    providers.push(`HuggingFace ML (${env.huggingface.model})`);
+  }
   if (env.gemini.apiKey) providers.push(`Gemini (${env.gemini.model})`);
   if (env.groq.apiKey) providers.push(`Groq (${env.groq.model})`);
   if (env.openrouter.apiKey) providers.push(`OpenRouter (${env.openrouter.model})`);

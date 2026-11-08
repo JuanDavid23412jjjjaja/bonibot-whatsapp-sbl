@@ -3,7 +3,7 @@
   "functions": {
     "api/webhook.ts": {
       "maxDuration": 30,
-      "includeFiles": "data/knowledge_base.json"
+      "includeFiles": "data/*.json"
     }
   }
 }
